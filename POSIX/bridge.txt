@@ -1,0 +1,10 @@
+_______.new._______
+Car 1 has entered the bridge.
+Car 1 has left the bridge.
+Truck 3 entered.
+Truck 3 has left
+Car 4 has entered the bridge.
+Car 4 has left the bridge.
+Truck 12 entered.
+Truck 12 has left
+_______.END._______

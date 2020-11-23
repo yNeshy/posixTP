@@ -1,0 +1,159 @@
+#include <time.h>
+
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <sys/socket.h> 
+#include <arpa/inet.h> 
+#include <unistd.h> 
+#include <string.h> 
+
+#define PORT 8080 
+#define SIX_SECONDS 6000000
+#define NUM_METROS 5
+#define print printf
+
+
+sem_t AB;
+sem_t BC;
+sem_t CD;
+sem_t EB;
+sem_t FA;
+sem_t SOCK;
+
+
+int sock = 0, valread; 
+struct sockaddr_in serv_addr; 
+
+char buffer[1024] = {0}; 
+
+void* enter( int ID){
+    sem_wait(&SOCK);
+    int rail = ( 3 * ID ) % NUM_METROS ;
+    char message[20] ;
+    sprintf(message, "%d:1:%d", rail, ID);
+    send(sock, message, strlen(message), 0);
+    sem_post(&SOCK);
+    printf("Sent %s", message);
+
+}
+
+void* leave(int ID){
+    sem_wait(&SOCK);
+    int rail = ( 3 * ID ) % NUM_METROS ;
+    char message[20] ;
+    sprintf(message, "%d:0:%d", rail, ID);
+    printf("left with %s", message);
+    send(sock, message, strlen(message), 0);
+    sem_post(&SOCK);
+
+}
+
+void setup_socket(){
+
+    sem_init(&SOCK, 0, 1);
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    { 
+        printf("\n Socket creation error \n"); 
+        return -1; 
+    } 
+   
+    serv_addr.sin_family = AF_INET; 
+    serv_addr.sin_port = htons(PORT); 
+       
+    // Convert IPv4 and IPv6 addresses from text to binary form 
+    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr)<=0)  
+    { 
+        printf("\nInvalid address/ Address not supported \n"); 
+        return -1; 
+    } 
+   
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+    { 
+        printf("\nConnection Failed \n"); 
+        return -1; 
+    } 
+}
+
+void* metro_func(void* rail){  
+    pthread_t signal ;
+    int metro_ID = (int) rail;
+    int rail_num = ( 3 * metro_ID ) % NUM_METROS ;
+    switch (rail_num){
+
+    case 0:
+    // ENTERING A->B
+        sem_wait(&AB);
+       pthread_create(&signal, NULL,enter, metro_ID);
+       pthread_join(signal, NULL);
+        usleep(SIX_SECONDS);
+        pthread_create(&signal, NULL,leave,  metro_ID);
+        sem_post(&AB);
+        break;
+    
+    case 1:
+    // ENTERING B->C
+       sem_wait(&BC);
+       pthread_create(&signal, NULL,enter,  metro_ID);
+        usleep(SIX_SECONDS);
+        pthread_create(&signal, NULL,leave, metro_ID);
+       sem_post(&BC);
+        break;
+
+    case 2:
+    // ENTERING C->D
+       sem_wait(&CD);
+        pthread_create(&signal, NULL, enter, metro_ID);
+        usleep(SIX_SECONDS);
+        pthread_create(&signal, NULL, leave, metro_ID);
+       sem_post(&CD);
+        break;
+    case 3:
+    // ENTERING E->B
+       sem_wait(&EB);
+        pthread_create(&signal, NULL, enter, metro_ID);
+        usleep(SIX_SECONDS);
+        pthread_create(&signal, NULL, leave, metro_ID);
+       sem_post(&EB);
+        break;
+
+    case 4:
+    // ENTERING F->A
+       sem_wait(&FA);
+        pthread_create(&signal, NULL, enter, metro_ID);
+        usleep(SIX_SECONDS);
+        pthread_create(&signal, NULL, leave, metro_ID);
+       sem_post(&FA);
+        break;
+
+    default:
+        printf("%d appeared out of the blue. It has been destroyed.\n", metro_ID);
+        break;
+    }   
+ 
+}
+
+
+int main(){
+   
+   sem_init(&AB, 0, 1);
+   sem_init(&BC, 0, 1);
+   sem_init(&CD, 0, 1);
+   sem_init(&EB, 0, 1);
+   sem_init(&FA, 0, 1);
+   setup_socket();
+
+
+   printf("Die Berlin Metro Station jetzt ist geöffnet.\n");
+
+   pthread_t metros[34];
+    int rail_number = 0;
+    for (int i=0; i<=34; i++){
+        pthread_create(&metros[i], NULL, metro_func,(void*)i);
+        usleep(SIX_SECONDS/(int)rand(10));
+    }
+    while(1);
+    return 0;
+    
+}
